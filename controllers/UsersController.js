@@ -5,7 +5,10 @@ import redisClient from '../utils/redis.js';
 
 class UsersController {
     static async postNew(req, res) {
-        const { email, password } = req.body;
+        const data = req.body;
+        
+        const email = data.email;
+        const password = data.password;
 
         // Check if email is missing
         if (!email) {
