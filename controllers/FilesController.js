@@ -93,7 +93,7 @@ class FilesController{
         const result = await dbClient.db.collection('files').insertOne(fileDocument);
         return res.status(201).json({
             id: result.insertedId,
-            user,
+            userId: user,
             name,
             type,
             isPublic,
