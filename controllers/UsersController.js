@@ -1,14 +1,14 @@
 /*eslint-disable*/
-import crypto from 'crypto';
-import dbClient from '../utils/db.js';
-import redisClient from '../utils/redis.js';
+import sha1 from 'sha1';
+import DBClient from '../utils/db';
+import RedisClient from '../utils/redis';
+
+const { ObjectId } = require('mongodb');
 
 class UsersController {
     static async postNew(req, res) {
-        const data = req.body;
-        
-        const email = data.email;
-        const password = data.password;
+        const email = req.body.email;
+        const password = req.body.password;
 
         // Check if email is missing
         if (!email) {
@@ -25,10 +25,10 @@ class UsersController {
         }
 
         // Hash the password using SHA1
-        const hashedPasswd = crypto.createHash('sha1').update(password).digest('hex');
+        const hashedPasswd = sha1(password);
         // Insert the new user ito the users collection
         const newUser = {
-            email,
+            email: email,
             password: hashedPasswd,
         };
         try {
@@ -44,11 +44,11 @@ class UsersController {
         if (!token) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
-        const userId = await redisClient.get(`auth_${token}`);
+        const userId = await RedisClient.get(`auth_${token}`);
         if (!userId) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
-        const user = await dbClient.db.collection('users').findOne({ _id: dbClient.ObjectId(userId) });
+        const user = await DBClient.db.collection('users').findOne({ _id: ObjectId(userId) });
         if (!user) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
