@@ -107,16 +107,23 @@ class FilesController{
             return res.status(401).json({ error: 'Unauthorized' });
         }
         const key = `auth_${token}`;
-        const user = await redisClient.get(key);
-        if (!user) {
+        const userId = await redisClient.get(key);
+        if (!userId) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
-        const { id } = req.params;
-        const file = await dbClient.db.collection('files').findOne({ _id: ObjectId(id) });
-        if (!file) {
+        const fileId = req.params.id;
+        try {
+            const file = await dbClient.db.collection('files').findOne({
+                _id: ObjectId(fileId),
+                userId: ObjectId(userId),
+            });
+            if (!file) {
+                return res.status(404).json({ error: 'Not found' });
+            }
+            return res.status(200).json(file);
+        } catch (error) {
             return res.status(404).json({ error: 'Not found' });
         }
-        return res.status(200).json(file);
     }
 
     static async getIndex(req, res) {
@@ -126,20 +133,27 @@ class FilesController{
         }
 
         const key = `auth_${token}`;
-        const user = await redisClient.get(key);
-
-        if (!user) {
+        const userId = await redisClient.get(key);
+        if (!userId) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
-
-        const parentId = req.query.parentId || 0;
-        const page = parseInt(req.query.page) || 0;
-        const itemsPerPage = 20;
-        const skip = page * itemsPerPage;
-
-        const files = await dbClient.db.collection('files').find({ userId: ObjectId(user), parentId: ObjectId(parentId) }).skip(skip).limit(itemsPerPage).toArray();
-
-        return res.status(200).json(files);
+        const { parentId = '0', page = 0 } = req.query;
+        const pageSize = 20;
+        const skip = pageSize * parseInt(page, 10);
+        let filter = { userId: ObjectId(userId) };
+        if (parentId !== '0') {
+            filter.parentId = ObjectId(parentId);
+        }
+        try {
+            const files = await dbClient.db.collection('files')
+            .find(filter)
+            .skip(skip)
+            .limit(pageSize)
+            .toArray();
+            return res.status(200).json(files);
+        } catch (error) {
+            return res.status(500).json({ error: 'Error retrieving files' });
+        }
     }
 }
 module.exports = FilesController;
