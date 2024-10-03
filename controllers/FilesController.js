@@ -6,7 +6,6 @@ import { v4 as uuidv4 } from 'uuid';
 import RedisClient from '../utils/redis';
 import DBClient from '../utils/db';
 
-const fs = require('fs');
 const Bull = require('bull');
 
 
@@ -114,7 +113,14 @@ class FilesController{
             if (!file) {
                 return res.status(404).json({ error: 'Not found' });
             }
-            return res.status(200).json(file);
+            return res.send({
+                id: file._id,
+                userId: file.userId,
+                name: file.name,
+                type: file.type,
+                isPublic: file.isPublic,
+                parentId: file.parentId
+            });
         } catch (error) {
             return res.status(404).json({ error: 'Not found' });
         }
@@ -127,27 +133,32 @@ class FilesController{
         }
 
         const key = `auth_${token}`;
-        const userId = await redisClient.get(key);
+        const userId = await RedisClient.get(key);
         if (!userId) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
         const { parentId = '0', page = 0 } = req.query;
-        const pageSize = 20;
-        const skip = pageSize * parseInt(page, 10);
-        let filter = { userId: ObjectId(userId) };
-        if (parentId !== '0') {
-            filter.parentId = ObjectId(parentId);
-        }
-        try {
-            const files = await dbClient.db.collection('files')
-            .find(filter)
-            .skip(skip)
-            .limit(pageSize)
-            .toArray();
-            return res.status(200).json(files);
-        } catch (error) {
-            return res.status(500).json({ error: 'Error retrieving files' });
-        }
+        // const pageSize = 20;
+        // const skip = pageSize * parseInt(page, 10);
+        const aggregationMatch = { $and: [{ parentId }] };
+        let aggregateData = [{ $match: aggregationMatch }, { $skip: pagination * 20 }, { $limit: 20 }];
+        if (parentId === 0) aggregateData = [{ $skip: pagination * 20 }, { $limit: 20 }];
+
+        const files = await DBClient.db.collection('files').aggregate(aggregateData);
+        const filesArray = [];
+        await files.forEach((item) => {
+            const fileItem = {
+                id: item._id,
+                userId: item.userId,
+                name: item.name,
+                type: item.type,
+                isPublic: item.isPublic,
+                parentId: item.parentId
+          };
+          filesArray.push(fileItem);
+        });
+
+        return response.send(filesArray);
     }
 }
 module.exports = FilesController;
