@@ -187,7 +187,7 @@ class FilesController{
             isPublic: fileDocument.isPublic,
             parentId: fileDocument.parentId
         });
-      }
+    }
     
     static async putUnpublish (request, response) {
         const token = request.header('X-Token') || null;
@@ -215,6 +215,44 @@ class FilesController{
             isPublic: fileDocument.isPublic,
             parentId: fileDocument.parentId
         });
-      }
+    }
+
+    static async getFile (request, response) {
+        const idFile = request.params.id || '';
+        const size = request.query.size || 0;
+    
+        const fileDocument = await DBClient.db.collection('files').findOne({ _id: ObjectId(idFile) });
+        if (!fileDocument) return response.status(404).send({ error: 'Not found' });
+    
+        const { isPublic } = fileDocument;
+        const { userId } = fileDocument;
+        const { type } = fileDocument;
+    
+        let user = null;
+        let owner = false;
+    
+        const token = request.header('X-Token') || null;
+        if (token) {
+            const redisToken = await RedisClient.get(`auth_${token}`);
+            if (redisToken) {
+                user = await DBClient.db.collection('users').findOne({ _id: ObjectId(redisToken) });
+                if (user) owner = user._id.toString() === userId.toString();
+          }
+        }
+    
+        if (!isPublic && !owner) return response.status(404).send({ error: 'Not found' });
+        if (['folder'].includes(type)) return response.status(400).send({ error: 'A folder doesn\'t have content' });
+    
+        const realPath = size === 0 ? fileDocument.localPath : `${fileDocument.localPath}_${size}`;
+    
+        try {
+            const dataFile = fs.readFileSync(realPath);
+            const mimeType = mime.contentType(fileDocument.name);
+            response.setHeader('Content-Type', mimeType);
+            return response.send(dataFile);
+        } catch (error) {
+          return response.status(404).send({ error: 'Not found' });
+        }
+    }
 }
 module.exports = FilesController;
